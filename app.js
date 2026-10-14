@@ -38,6 +38,21 @@
   const fmtDate = t => new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const fmtDur = ms => { const m = Math.floor(ms / 60000), s = Math.floor(ms / 1000) % 60; return `${m}m ${String(s).padStart(2, '0')}s`; };
 
+  // In-page yes/no dialog (native browser dialogs are blocked in some embedded viewers)
+  function ask(message, okLabel) {
+    return new Promise(resolve => {
+      const wrap = document.createElement('div');
+      wrap.className = 'modal-back';
+      wrap.innerHTML = `<div class="modal" role="dialog" aria-modal="true"><p>${esc(message)}</p><div class="row"><span class="spacer"></span><button class="btn" data-a="no">Cancel</button><button class="btn primary" data-a="yes">${esc(okLabel || 'OK')}</button></div></div>`;
+      const done = v => { wrap.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+      const onKey = e => { if (e.key === 'Escape') done(false); };
+      wrap.addEventListener('click', e => { if (e.target === wrap || e.target.dataset.a === 'no') done(false); else if (e.target.dataset.a === 'yes') done(true); });
+      document.addEventListener('keydown', onKey);
+      document.body.appendChild(wrap);
+      wrap.querySelector('[data-a=yes]').focus();
+    });
+  }
+
   function pools() {
     const p = state.progress;
     const seen = BANK.filter(q => p[q.id]);
@@ -76,8 +91,8 @@
         <div class="card"><h2>Study</h2><p class="muted">Browse every question with its answer and explanation. Filter to the ones you got wrong.</p><a class="btn" href="#study">Open study mode</a></div>
       </div>`;
     app.querySelector('[data-act=resume]')?.addEventListener('click', () => go(s.phase === 'choice' ? 'results' : 'test'));
-    app.querySelector('[data-act=discard]')?.addEventListener('click', () => {
-      if (confirm('Discard the test in progress?')) { state.session = null; save(); viewHome(); }
+    app.querySelector('[data-act=discard]')?.addEventListener('click', async () => {
+      if (await ask('Discard the test in progress?', 'Discard')) { state.session = null; save(); viewHome(); }
     });
   }
 
@@ -134,12 +149,12 @@
     }
     form.addEventListener('change', refresh);
     form.querySelector('#chips').addEventListener('click', e => { const c = e.target.dataset.c; if (c) countEl.value = c; });
-    form.addEventListener('submit', e => {
+    form.addEventListener('submit', async e => {
       e.preventDefault();
       const src = pool();
       const n = Math.min(src.length, Math.max(1, parseInt(countEl.value, 10) || 0));
       if (!src.length) return;
-      if (state.session && state.session.phase !== 'done' && !confirm('This replaces your test in progress. Continue?')) return;
+      if (state.session && state.session.phase !== 'done' && !(await ask('This replaces your test in progress. Continue?', 'Start new test'))) return;
       state.lastSetup = { mode: form.mode.value, repeat: form.repeat.value, count: n };
       const modeLabel = form.mode.value === 'new' ? 'New only' : form.mode.value === 'mix' ? 'Mix' : (form.repeat.value === 'wrong' ? 'Repeat (wrong)' : 'Repeat (seen)');
       state.session = {
@@ -223,9 +238,9 @@
     app.querySelector('[data-act=next]')?.addEventListener('click', () => move(s.idx + 1));
     app.querySelector('[data-act=flag]').addEventListener('click', () => { s.flags[q.id] = !s.flags[q.id]; save(); viewTest(); });
     app.querySelector('.palette').addEventListener('click', e => { if (e.target.dataset.i) move(+e.target.dataset.i); });
-    app.querySelectorAll('[data-act=submit]').forEach(b => b.addEventListener('click', () => {
+    app.querySelectorAll('[data-act=submit]').forEach(b => b.addEventListener('click', async () => {
       const missing = ids.filter(id => (ans[id] || []).length !== BY_ID.get(id).answer.length).length;
-      if (missing && !confirm(`${missing} question${missing === 1 ? ' is' : 's are'} unanswered or incomplete. Submit anyway?`)) return;
+      if (missing && !(await ask(`${missing} question${missing === 1 ? ' is' : 's are'} unanswered or incomplete. Submit anyway?`, 'Submit'))) return;
       submitRound();
     }));
   }
@@ -481,8 +496,8 @@
         <p class="muted small">Clears which questions you have seen, your results and your history on this device.</p>
         <button class="btn danger" data-act="reset">Reset all progress</button>
       </div>`;
-    app.querySelector('[data-act=reset]').addEventListener('click', () => {
-      if (confirm('Delete all progress and history? This cannot be undone.')) { state = emptyState(); save(); viewHistory(); }
+    app.querySelector('[data-act=reset]').addEventListener('click', async () => {
+      if (await ask('Delete all progress and history? This cannot be undone.', 'Delete everything')) { state = emptyState(); save(); viewHistory(); }
     });
   }
 
