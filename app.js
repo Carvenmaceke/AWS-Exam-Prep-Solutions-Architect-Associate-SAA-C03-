@@ -534,6 +534,18 @@
   const savedCode = () => { try { return localStorage.getItem(CODE_KEY); } catch (e) { return null; } };
   function setSavedCode(c) { try { c ? localStorage.setItem(CODE_KEY, c) : localStorage.removeItem(CODE_KEY); } catch (e) { /* ignore */ } }
 
+  // Wrong code: a big laughing face and "Zama nakambe" for a few seconds
+  function laughAtWrongCode() {
+    document.querySelector('.laugh')?.remove();
+    const el = document.createElement('div');
+    el.className = 'laugh';
+    el.setAttribute('role', 'alert');
+    el.innerHTML = '<span class="laugh-face" aria-hidden="true">😂</span><span class="laugh-text">Zama nakambe</span>';
+    document.body.appendChild(el);
+    setTimeout(() => el.classList.add('out'), 2600);
+    setTimeout(() => el.remove(), 3100);
+  }
+
   function viewLogin(message) {
     document.body.classList.add('locked');
     app.innerHTML = `
@@ -559,7 +571,9 @@
         start();
       } catch (err) {
         btn.disabled = false; btn.textContent = 'Unlock';
-        form.querySelector('#err').textContent = 'That code is not correct. Check it and try again.';
+        form.querySelector('#err').textContent = '';
+        laughAtWrongCode();
+        form.querySelector('#code').select();
       }
     });
   }

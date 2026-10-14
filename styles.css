@@ -195,3 +195,12 @@ table.hist th, table.hist td { text-align: left; padding: 8px 6px; border-bottom
 .nav-btn { appearance: none; background: none; border: 1px solid #3a4c66; color: #d6deea; font: inherit; font-size: 14px; padding: 5px 10px; border-radius: 8px; cursor: pointer; }
 .nav-btn:hover { background: var(--navy-2); color: #fff; }
 body.locked .nav { display: none; }
+
+/* Wrong access code */
+.laugh { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; background: rgba(8, 14, 24, .6); pointer-events: none; transition: opacity .5s ease; }
+.laugh.out { opacity: 0; }
+.laugh-face { font-size: min(45vw, 260px); line-height: 1; animation: laugh-shake .35s ease-in-out infinite alternate, laugh-pop .4s ease-out; }
+.laugh-text { color: #fff; font-size: clamp(28px, 8vw, 56px); font-weight: 800; text-align: center; text-shadow: 0 2px 12px rgba(0, 0, 0, .5); }
+@keyframes laugh-shake { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
+@keyframes laugh-pop { from { scale: .3; } to { scale: 1; } }
+@media (prefers-reduced-motion: reduce) { .laugh-face { animation: none; } .laugh { transition: none; } }
