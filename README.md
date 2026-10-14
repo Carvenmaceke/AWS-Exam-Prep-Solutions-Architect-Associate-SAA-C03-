@@ -16,20 +16,24 @@ A practice-test and study website for the **AWS Certified Solutions Architect â€
 
 Progress is saved in your browser (`localStorage`), so it stays on the device and browser you use.
 
+## Access code
+
+The site opens with a sign-in screen that asks for a single access code. The question bank and the exhibits are stored **encrypted** in `data/bank.enc.js` (AES-256-GCM, with the key derived from the code using PBKDF2-SHA256). Without the code, the files in the repo can't be read. The code itself is not stored anywhere in the repo. Spaces, dashes and upper/lower case are ignored when you type it. "Keep me signed in" remembers the code in that browser; **Sign out** forgets it.
+
+To change the code, re-encrypt the bank with a new one (see below).
+
 ## Running it
 
-It's a static site with no build step. Either:
-- open `index.html` in a browser, or
-- serve the folder (GitHub Pages, or `python3 -m http.server`).
+It's a static site with no build step. Serve the folder with GitHub Pages, or locally with `python3 -m http.server` and open http://localhost:8000.
 
 ## Files
 
 | Path | What it is |
 | --- | --- |
 | `index.html`, `styles.css`, `app.js` | The app |
-| `data/questions.js` | Question bank extracted from the PDF |
-| `img/` | Exhibits (IAM policies) for the 7 questions that show them as images |
-| `tools/parse.py`, `tools/images.py` | Scripts used to extract the questions and exhibits from the PDF |
+| `data/bank.enc.js` | Encrypted question bank and exhibit images |
+| `tools/parse.py`, `tools/images.py` | Scripts used to extract the questions and exhibits (IAM policy images for 7 questions) from the PDF |
+| `tools/encrypt.py` | Encrypts the extracted bank with the access code |
 
 ### Regenerating the data
 
@@ -39,7 +43,13 @@ python3 tools/parse.py saa.txt questions.json
 python3 tools/images.py saa-c03.pdf questions.json img   # crops exhibits, writes PNGs
 ```
 
-Then wrap `questions.json` as `window.QUESTIONS = â€¦;` in `data/questions.js`. The site expects `.jpg` exhibits, so convert the PNGs (the committed ones are JPEGs).
+Convert the exhibits to JPEG if you like, keeping the same names with `.jpg` (the question text refers to `.jpg` files). Then encrypt:
+
+```sh
+ACCESS_CODE='YOUR-LONG-CODE' python3 tools/encrypt.py questions.json img data/bank.enc.js
+```
+
+The site has to be served over https (GitHub Pages) or `localhost`, because browsers only allow the decryption API there. Opening `index.html` straight from disk won't work.
 
 ## Notes on the source document
 

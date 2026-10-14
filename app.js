@@ -1,10 +1,13 @@
-/* AWS SAA-C03 practice app. All questions, answers and explanations come from data/questions.js. */
+/* AWS SAA-C03 practice app. Questions, answers and explanations are decrypted from data/bank.enc.js with the access code. */
 (function () {
   'use strict';
 
-  const BANK = window.QUESTIONS || [];
-  const BY_ID = new Map(BANK.map(q => [q.id, q]));
+  // Filled in once the access code decrypts data/bank.enc.js
+  let BANK = [];
+  let BY_ID = new Map();
+  let IMAGES = {};
   const STORE_KEY = 'saa-c03-prep-v1';
+  const CODE_KEY = 'saa-c03-access-code';
   const PAGE_SIZE = 10;
   const app = document.getElementById('app');
 
@@ -26,7 +29,7 @@
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   function inline(s) {
     return esc(s)
-      .replace(/\[\[img:([\w.-]+)\]\]/g, (m, f) => `<img class="q-img" src="img/${f}" alt="Exhibit from the question" loading="lazy">`)
+      .replace(/\[\[img:([\w.-]+)\]\]/g, (m, f) => `<img class="q-img" src="${IMAGES[f] || ''}" alt="Exhibit from the question">`)
       .replace(/(https?:\/\/[^\s<]+[^\s<.,;:)\]])/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
   }
   const paras = s => String(s).split('\n').filter(Boolean).map(l => /^\[\[img:/.test(l) ? inline(l) : `<p>${inline(l)}</p>`).join('');
@@ -505,7 +508,7 @@
   function route() {
     const [name, arg] = (location.hash.slice(1) || 'home').split('/');
     document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.nav === name));
-    if (!BANK.length) { app.innerHTML = '<div class="card empty">Question data failed to load (data/questions.js).</div>'; return; }
+    if (!BANK.length) return viewLogin();
     switch (name) {
       case 'setup': return viewSetup();
       case 'test': return viewTest();
@@ -516,6 +519,73 @@
       default: return viewHome();
     }
   }
-  window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
-  route();
+  /* ---------- access code ---------- */
+  const normCode = c => String(c).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  async function unlock(code) {
+    const enc = window.ENCRYPTED_BANK;
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(normCode(code)), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64(enc.salt), iterations: enc.iter, hash: 'SHA-256' },
+      base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(enc.iv) }, key, b64(enc.data));  // throws on a wrong code
+    const data = JSON.parse(new TextDecoder().decode(plain));
+    BANK = data.questions; BY_ID = new Map(BANK.map(q => [q.id, q])); IMAGES = data.images;
+  }
+  const savedCode = () => { try { return localStorage.getItem(CODE_KEY); } catch (e) { return null; } };
+  function setSavedCode(c) { try { c ? localStorage.setItem(CODE_KEY, c) : localStorage.removeItem(CODE_KEY); } catch (e) { /* ignore */ } }
+
+  function viewLogin(message) {
+    document.body.classList.add('locked');
+    app.innerHTML = `
+      <form class="card login" id="login">
+        <h1>Enter your access code</h1>
+        <p class="lead">This practice site is locked. Type or paste your access code to open it.</p>
+        <label class="field" for="code">Access code</label>
+        <input type="password" id="code" autocomplete="current-password" spellcheck="false" autocapitalize="characters" required>
+        <label class="row small"><input type="checkbox" id="remember" checked> Keep me signed in on this device</label>
+        <p class="login-error" id="err" role="alert">${message ? esc(message) : ''}</p>
+        <button class="btn primary" type="submit" id="unlock">Unlock</button>
+      </form>`;
+    const form = app.querySelector('#login');
+    form.querySelector('#code').focus();
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const code = form.querySelector('#code').value;
+      const btn = form.querySelector('#unlock');
+      btn.disabled = true; btn.textContent = 'Checking…';
+      try {
+        await unlock(code);
+        setSavedCode(form.querySelector('#remember').checked ? code : null);
+        start();
+      } catch (err) {
+        btn.disabled = false; btn.textContent = 'Unlock';
+        form.querySelector('#err').textContent = 'That code is not correct. Check it and try again.';
+      }
+    });
+  }
+
+  let started = false;
+  function start() {
+    document.body.classList.remove('locked');
+    if (!started) {
+      started = true;
+      window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
+      document.querySelector('[data-act=logout]').addEventListener('click', () => {
+        setSavedCode(null);
+        BANK = []; BY_ID = new Map(); IMAGES = {};
+        viewLogin('You are signed out.');
+      });
+    }
+    route();
+  }
+
+  (async function boot() {
+    if (!window.ENCRYPTED_BANK || !window.crypto || !crypto.subtle) {
+      app.innerHTML = '<div class="card empty">The question bank could not be loaded. Open the site over https (for example GitHub Pages), not as a local file.</div>';
+      return;
+    }
+    const c = savedCode();
+    if (c) { try { await unlock(c); return start(); } catch (e) { setSavedCode(null); } }
+    viewLogin();
+  })();
 })();
