@@ -535,7 +535,45 @@
   function setSavedCode(c) { try { c ? localStorage.setItem(CODE_KEY, c) : localStorage.removeItem(CODE_KEY); } catch (e) { /* ignore */ } }
 
   // Wrong code: a big laughing face and "Zama nakambe" for a few seconds
+  // A flat, bored "ha. ha. ha. ha." made with Web Audio (no sound file needed)
+  let audioCtx = null;
+  function primeAudio() {  // must run inside the click so browsers allow sound
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) { audioCtx = null; }
+  }
+  function boringLaugh() {
+    if (!audioCtx) return;
+    const ctx = audioCtx, t0 = ctx.currentTime + 0.05;
+    const out = ctx.createGain(); out.gain.value = 0.35; out.connect(ctx.destination);
+    for (let i = 0; i < 4; i++) {
+      const t = t0 + i * 0.42;
+      const voice = ctx.createOscillator();          // same low pitch every time: bored
+      voice.type = 'sawtooth';
+      voice.frequency.setValueAtTime(118, t);
+      voice.frequency.linearRampToValueAtTime(i === 3 ? 92 : 110, t + 0.22);  // last "ha" sags
+      const mouth = ctx.createBiquadFilter();        // "ah" vowel
+      mouth.type = 'bandpass'; mouth.frequency.value = 750; mouth.Q.value = 2.5;
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0, t);
+      env.gain.linearRampToValueAtTime(1, t + 0.03);
+      env.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
+      // breathy "h" at the start of each "ha"
+      const noise = ctx.createBufferSource();
+      const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.08), ctx.sampleRate);
+      const d = buf.getChannelData(0); for (let k = 0; k < d.length; k++) d[k] = (Math.random() * 2 - 1) * (1 - k / d.length);
+      noise.buffer = buf;
+      const breath = ctx.createGain(); breath.gain.value = 0.25;
+      voice.connect(mouth); mouth.connect(env); env.connect(out);
+      noise.connect(breath); breath.connect(out);
+      voice.start(t); voice.stop(t + 0.26);
+      noise.start(t - 0.04);
+    }
+  }
+
   function laughAtWrongCode() {
+    boringLaugh();
     document.querySelector('.laugh')?.remove();
     const el = document.createElement('div');
     el.className = 'laugh';
@@ -564,6 +602,7 @@
       e.preventDefault();
       const code = form.querySelector('#code').value;
       const btn = form.querySelector('#unlock');
+      primeAudio();
       btn.disabled = true; btn.textContent = 'Checking…';
       try {
         await unlock(code);
